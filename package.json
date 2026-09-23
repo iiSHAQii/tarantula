@@ -1,0 +1,16 @@
+{
+  "name": "tarantula",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Local-first collection engine. Reads Reddit threads through public archives and keeps them in one SQLite file.",
+  "type": "module",
+  "bin": {
+    "tarantula": "src/cli.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --no-warnings --test"
+  }
+}
