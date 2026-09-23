@@ -2,12 +2,12 @@
 const when = s => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'unknown');
 const count = list => list.reduce((n, c) => n + 1 + count(c.replies), 0);
 
-export function renderThread({ post, tree, source, seenAt, partial, collapsed, focus }) {
+export function renderThread({ post, tree, source, fetchedAt, partial, collapsed, focus }) {
   const out = [
     `# ${post.title}`,
     `r/${post.subreddit} · u/${post.author} · posted ${when(post.created_utc)}`,
     `https://www.reddit.com${post.permalink ?? `/comments/${post.id}/`}`,
-    `archived copy via ${source}, captured ${when(seenAt)} (scores are as captured, often stale)`,
+    `archived copy via ${source}, captured ${when(fetchedAt)} (scores are as captured, often stale)`,
     '',
   ];
   if (post.selftext?.trim()) out.push(post.selftext.trim(), '');

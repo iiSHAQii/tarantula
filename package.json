@@ -1,14 +1,17 @@
 {
-  "name": "tarantula",
-  "version": "0.0.1",
-  "private": true,
+  "name": "tarantula-cli",
+  "version": "0.1.0",
+  "license": "MIT",
   "description": "Local-first collection engine. Reads Reddit threads through public archives and keeps them in one SQLite file.",
   "type": "module",
+  "files": ["src", "README.md", "ARCHITECTURE.md", "LICENSE"],
+  "repository": "github:iishaqii/tarantula",
+  "publishConfig": { "access": "public" },
   "bin": {
     "tarantula": "src/cli.js"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=20"
   },
   "scripts": {
     "test": "node --no-warnings --test"

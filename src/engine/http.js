@@ -28,7 +28,7 @@ export function createHttp({ fetch = globalThis.fetch, userAgent = 'tarantula', 
       if (res.status === 429 && attempt < RETRIES) { await wait(5000 * 2 ** attempt); continue; }
       if (res.status !== 200) throw new SourceDown(`${host}: HTTP ${res.status}`);
       try {
-        return { text, json: JSON.parse(text) };
+        return JSON.parse(text);
       } catch {
         throw new SourceDown(`${host}: 200 but not JSON (block page or outage)`);
       }
