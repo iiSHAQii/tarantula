@@ -1,12 +1,19 @@
 {
   "name": "tarantula-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "MIT",
   "description": "Read Reddit threads and search subreddits through public archives, from the terminal or as an MCP server for Claude Code.",
   "type": "module",
-  "files": ["src", "README.md", "ARCHITECTURE.md", "LICENSE"],
+  "files": [
+    "src",
+    "README.md",
+    "ARCHITECTURE.md",
+    "LICENSE"
+  ],
   "repository": "github:iishaqii/tarantula",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "tarantula": "src/cli.js"
   },
