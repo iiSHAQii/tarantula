@@ -17,8 +17,11 @@ starts faster than `npx`.
 ## Use it from Claude Code (MCP)
 
 ```
-claude mcp add --scope user tarantula -- npx -y tarantula-cli mcp
+claude mcp add --scope user tarantula -- npx -y tarantula-cli@latest mcp
 ```
+
+Keep the `@latest`: without it, `npx` reuses whatever version it cached first and never picks
+up updates.
 
 Then just ask, e.g. *"search r/smallbusiness for posts about packaging costs this year and
 summarise the top complaints"*. Claude gets two tools:
@@ -28,7 +31,7 @@ summarise the top complaints"*. Claude gets two tools:
 
 `--scope user` makes it available in every project; leave it off to add it to the current
 project only. `claude mcp list` should show `tarantula … ✔ Connected`. Any other MCP client can
-run the same command (`npx -y tarantula-cli mcp`, stdio).
+run the same command (`npx -y tarantula-cli@latest mcp`, stdio).
 
 Everything the tools return is marked as untrusted user-generated text, so Claude treats it as
 material to read, not instructions to follow.
