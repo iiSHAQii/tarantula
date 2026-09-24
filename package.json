@@ -1,8 +1,8 @@
 {
   "name": "tarantula-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT",
-  "description": "Local-first collection engine. Reads Reddit threads through public archives and keeps them in one SQLite file.",
+  "description": "Read Reddit threads and search subreddits through public archives, from the terminal or as an MCP server for Claude Code.",
   "type": "module",
   "files": ["src", "README.md", "ARCHITECTURE.md", "LICENSE"],
   "repository": "github:iishaqii/tarantula",

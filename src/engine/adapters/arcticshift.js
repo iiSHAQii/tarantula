@@ -26,6 +26,14 @@ export default {
     return { post, comments: rows, collapsed: stats.collapsed };
   },
 
+  // `query` matches title and body. Arctic Shift's docs: needs a subreddit, not supported on very
+  // active subreddits (those answer with an error, which the chain treats as down -> PullPush).
+  async search({ subreddit, query, after }, get) {
+    const url = `${API}/posts/search?subreddit=${subreddit}&query=${encodeURIComponent(query)}&limit=100&sort=desc`
+      + (after ? `&after=${after}` : '');
+    return (await get(url)).data ?? [];
+  },
+
   // /r/x/s/<code> -> full path; only works for share links the archive has seen in some comment
   async resolveShortLink(path, get) {
     const [hit] = (await get(`${API}/short_links?paths=${path}`)).data ?? [];

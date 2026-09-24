@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, statSy
 import { join } from 'node:path';
 import { gzipSync, gunzipSync } from 'node:zlib';
 
-const VERSION = 1; // bump when the entry shape changes; older files then read as misses
+const VERSION = 2; // bump when the entry shape changes; older files then read as misses (2: schema-1 items)
 const MAX_AGE_S = 7 * 86_400;
 const MAX_BYTES = 100 * 1024 * 1024;
 

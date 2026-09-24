@@ -21,4 +21,10 @@ export default {
     }
     return { post, comments: [...seen.values()] };
   },
+
+  async search({ subreddit, query, after }, get) {
+    const url = `${API}/submission/?subreddit=${subreddit}&q=${encodeURIComponent(query)}&size=100&sort=desc&sort_type=created_utc`
+      + (after ? `&after=${after}` : '');
+    return (await get(url)).data ?? [];
+  },
 };

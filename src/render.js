@@ -1,29 +1,43 @@
-// Thread -> markdown for terminals and LLMs.
-const when = s => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'unknown');
-const count = list => list.reduce((n, c) => n + 1 + count(c.replies), 0);
+// Schema-1 results -> markdown for terminals and LLMs.
+import { countTree } from './engine/reddit.js';
 
-export function renderThread({ post, tree, source, fetchedAt, partial, collapsed, focus }) {
+const when = s => (s ? new Date(s * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'unknown');
+const flag = i => (i.status === 'live' ? '' : ` · [${i.status}]`);
+
+export function renderThread({ thread: t, comments, provenance: p, completeness: c, focus }) {
   const out = [
-    `# ${post.title}`,
-    `r/${post.subreddit} · u/${post.author} · posted ${when(post.created_utc)}`,
-    `https://www.reddit.com${post.permalink ?? `/comments/${post.id}/`}`,
-    `archived copy via ${source}, captured ${when(fetchedAt)} (scores are as captured, often stale)`,
+    `# ${t.title}`,
+    `r/${t.container} · u/${t.author} · posted ${when(t.created_at)}${flag(t)}`,
+    t.url,
+    `archived copy via ${p.source}${p.cached ? ' (cached)' : ''}, captured ${when(p.fetched_at)}; scores are as captured, often stale`,
     '',
   ];
-  if (post.selftext?.trim()) out.push(post.selftext.trim(), '');
+  if (t.text.trim()) out.push(t.text.trim(), '');
 
-  const n = count(tree);
+  const n = countTree(comments);
   out.push('---', focus ? `Comment ${focus} and its replies (${n})` : `${n} comments`, '');
-  if (partial) out.push(`> Warning: the post reports ${post.num_comments} comments but no source returned any yet.`, '');
-  if (collapsed) out.push(`> ${collapsed} comments were collapsed by the archive and are not shown.`, '');
+  if (c.truncated) out.push(`> Truncated: showing the first ${n} of ${c.received} comments in this thread.`, '');
+  if (c.partial) out.push(`> Warning: the post reports ${c.expected} comments but no source returned any yet.`, '');
+  if (c.collapsed) out.push(`> ${c.collapsed} comments were collapsed by the archive and are not shown.`, '');
 
   const walk = (list, pad) => {
-    for (const c of list) {
-      out.push(`${pad}- **u/${c.author}** · ${c.score} pts · ${when(c.created_utc)}`);
-      for (const line of String(c.body ?? '').trim().split('\n')) out.push(`${pad}  ${line}`);
-      walk(c.replies, pad + '  ');
+    for (const i of list) {
+      out.push(`${pad}- **u/${i.author}** · ${i.score} pts · ${when(i.created_at)}${flag(i)}`);
+      for (const line of i.text.trim().split('\n')) out.push(`${pad}  ${line}`);
+      walk(i.replies, pad + '  ');
     }
   };
-  walk(tree, '');
+  walk(comments, '');
+  return out.join('\n');
+}
+
+export function renderSearch({ subreddit, query, results, provenance: p }) {
+  const out = [`# r/${subreddit}: "${query}"`, `${results.length} posts via ${p.source}, most-discussed first`, ''];
+  if (!results.length) out.push('No matches. Archive search can miss very active subreddits; try other words or another subreddit.');
+  for (const r of results) {
+    out.push(`- **${r.title}** · ${r.comment_count ?? '?'} comments · ${when(r.created_at)} · u/${r.author}${flag(r)}`, `  ${r.url}`);
+    const snippet = r.text.replace(/\s+/g, ' ').trim();
+    if (snippet) out.push(`  > ${snippet.length > 200 ? snippet.slice(0, 200) + '…' : snippet}`);
+  }
   return out.join('\n');
 }

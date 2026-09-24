@@ -12,5 +12,9 @@ Instructions for AI coding agents (and humans) working in this repo.
 - **Keep the polite defaults** (per-host pacing, backoff, identifying User-Agent). The archives
   are volunteer-run; don't hammer them from tests or scripts.
 - **No logged-in-browser scraping** in this repo.
+- **Never write to stdout from engine code.** `tarantula mcp` uses stdout for protocol messages;
+  a stray `console.log` breaks every MCP client. Log to stderr.
+- **`--json` / MCP output is a contract (schema 1).** Adding a field is fine; renaming or removing
+  one needs a new `schema` number and a note in ARCHITECTURE.md.
 - **Smallest change that works.** Mark deliberate shortcuts with a `ponytail:` comment that names
   the ceiling and the upgrade path.
