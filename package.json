@@ -1,6 +1,6 @@
 {
   "name": "tarantula-cli",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "license": "MIT",
   "description": "Read Reddit threads and search subreddits through public archives, from the terminal or as an MCP server for Claude Code.",
   "type": "module",
