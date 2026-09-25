@@ -47,6 +47,7 @@ Every archive call goes through `http.get`: per-host pacing, 429 backoff, 20 s t
 | `src/engine/adapters/*.js` | one source each: its URLs, response shape → raw rows | touch the cache; they only get a `get(url)` |
 | `src/engine/errors.js` | `UserError`, `NotFound`, `SourceDown` | — |
 | `test/engine.test.js` | the runnable checks (`npm test`), synthetic fixtures, no network | contain real Reddit content |
+| `assets/` | README and portfolio artwork; `node assets/generate.mjs` rebuilds the three SVGs, the GIFs are screen recordings | ship in the npm package (not in `files`) |
 
 ## Output contract (schema 1)
 
