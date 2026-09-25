@@ -38,9 +38,10 @@ const TOOLS = [
   {
     name: 'search_reddit',
     title: 'Search a subreddit',
-    description: 'Find posts in one subreddit whose title or body matches a query; returns the most-discussed '
-      + 'of the 100 newest matches, with links for read_reddit_thread. Archive search needs a subreddit; on busy '
-      + `subreddits it can time out, so retry or set days (e.g. 365). ${UNTRUSTED}`,
+    description: 'Find posts in one subreddit whose title or body contains every query word; returns the newest '
+      + 'matches with links for read_reddit_thread. Use one or two broad words. When the archive\'s keyword '
+      + 'search is unavailable it scans recent posts instead (default last 30 days) and says how far back it got. '
+      + `Comment counts are not included (archives capture them too early). ${UNTRUSTED}`,
     inputSchema: {
       type: 'object',
       properties: {

@@ -18,9 +18,9 @@ Status: **Phase 2 — `search` + MCP server + schema-1 output** (0.2.0).
                             ▼
  readThread(ref)                                  searchPosts({ subreddit, query, days })
    parseRedditRef ─(share link)─► resolveShortLink    validate subreddit + query
-   cache.get ── fresh? ──────────────┐                firstHealthy over adapter.search
+   cache.get ── fresh? ──────────────┐                firstHealthy: search, else scan
    firstHealthy over adapter.thread  │                (empty page → next source)
-   toItem → cache.put (not partial)  │                toItem, most-discussed first
+   toItem → cache.put (not partial)  │                toItem, newest first         
    buildTree ◄───────────────────────┘                        │
             │                                                 │
             └──────► schema-1 result ◄────────────────────────┘
@@ -30,7 +30,7 @@ Status: **Phase 2 — `search` + MCP server + schema-1 output** (0.2.0).
               stdout (CLI)  or  untrusted-wrapped MCP tool result
 ```
 
-Every archive call goes through `http.get`: per-host pacing, 429 backoff, 20 s timeout,
+Every archive call goes through `http.get`: per-host pacing, one retry on 429 or a network error, 20 s timeout,
 "down" detection, and a 10-minute skip for a host that just failed.
 
 ## Code map
@@ -67,7 +67,8 @@ with a new `schema` number.
 }
 ```
 
-Search: `{ schema, subreddit, query, results: [post items], provenance: { source, fetched_at } }`.
+Search: `{ schema, subreddit, query, results: [post items, newest first], provenance: { source, fetched_at, method: "search" | "scan", scanned?, back_to? } }`.
+`comment_count` on search results is the archive's snapshot from minutes after posting (usually 0); the markdown hides it.
 
 - `(platform, id)` is the unique key; `id` is whatever the platform uses (Reddit fullnames here).
 - `expected` is the post's own comment count at capture; `received` is what the archive returned.
@@ -82,6 +83,7 @@ export default {
   name, minIntervalMs,
   thread(id, get)                         // -> { post, comments: flat rows, collapsed? } | null when the source lacks it
   search({ subreddit, query, after }, get) // optional -> raw post rows (empty array when nothing matches)
+  list({ subreddit, after, before }, get)  // optional -> up to 100 posts newest-first, no keywords; lets the engine scan when search is refused
   resolveShortLink(path, get)             // optional -> '/r/.../comments/...' | null
 }
 ```
@@ -99,11 +101,15 @@ source surfaces as `SourceDown` from `http.js`.
   another version → miss. Writes go to a temp file and are renamed into place.
 - **Cache entries carry a version (`v`, now 2).** Changing the entry shape means bumping it; old
   files then read as misses. That is the whole migration story.
-- **"Down" means fall back, never "empty".** 5xx, non-JSON bodies (block pages), timeouts and
-  exhausted 429s are `SourceDown` and the host is skipped for 10 minutes. A 4xx is also
+- **"Down" means fall back, never "empty".** 5xx, non-JSON bodies (block pages), timeouts, repeated
+  network errors and repeated 429s are `SourceDown` and the host is skipped for 10 minutes. A 4xx is also
   `SourceDown` (fall back) but isn't remembered: it's about that request, not the host. A post that
   reports comments while the source returns none is *incomplete*; an empty search page is too.
   `NotFound` only when every source answered; if any was down the result is `SourceDown`.
+- **Search = archive keyword search, else a scan.** If `search` is refused (`SourceDown`) and the adapter
+  has `list`, the engine pages the listing newest-first (last 30 days unless `days`, at most 20 pages =
+  2,000 posts) and keeps posts whose title+body contain every query word. A scan that read posts and
+  matched none is a real "no matches" and doesn't fall through to the next source.
 - **Archive error text is passed on** (`HTTP 422: Timeout. Maybe slow down a bit`), never a bare code.
 - **MCP output is untrusted data.** Tool descriptions, server instructions and a note before every
   result say so, and all Reddit text sits inside `<untrusted-reddit-content>`; any copy of that
@@ -114,7 +120,7 @@ source surfaces as `SourceDown` from `http.js`.
 - **Both MCP handshake styles.** Legacy `initialize` (2025-11-25 and earlier; what Claude Code
   2.1.281 sends, observed 2026-09-24) and modern per-request `_meta` + `server/discover`
   (2026-07-28). Unknown versions get `-32022` with the supported list.
-- **Polite by default:** per-host pacing (Arctic Shift 1 s, PullPush 4 s), exponential backoff on
+- **Polite by default:** per-host pacing (Arctic Shift 1 s, PullPush 4 s), one 5 s retry on
   429, a User-Agent carrying the repo URL. Both archives are volunteer-run.
 - **Comments are shown chronologically.** Archives capture scores near posting time, so score
   order would be noise.
@@ -122,9 +128,14 @@ source surfaces as `SourceDown` from `http.js`.
 
 ## Known limitations (observed, not yet handled)
 
-- **Archive search times out on busy subreddits.** 2026-09-24, r/smallbusiness: `query` over all
-  time → `422 Timeout`; a 365-day window worked, a 30-day window and a title-only search timed
-  out minutes later. Small subreddits work. The error suggests `days`; no automatic retry yet.
+- **Archive keyword search is rationed** (stress test 2026-09-24): Arctic Shift answered 2 of 12
+  `query`/`title` searches; the rest got `422 Timeout` in ~0.5 s, small subreddits included, still
+  refused after 65 s idle. Plain listings: 5/5, ~1.2 s, newest post 6 min old. PullPush 429'd every
+  search from the first call but answered id and comment lookups; it lacked two r/germany posts
+  (12 h and 32 h old) and lagged ~9 h on another. Handled by the scan; its ceiling is 2,000 posts
+  (~22 days of r/germany, ~30 s for a rare word).
+- **Archive comment counts are frozen near posting time**: 95 % of recent r/germany posts show 0; one
+  showing 0 had 7 comments in its tree. Live counts need a live source (Lane B, parked).
 - **Archive coverage has holes.** 2026-09-20: PullPush had all 54 comments of a thread but not
   the post itself, so it reports "not found" and the chain moves on.
 - **Archives may keep text a user later deleted on Reddit.** We show whatever the archive has;
@@ -154,7 +165,9 @@ source surfaces as `SourceDown` from `http.js`.
 - [x] Cache age scales with thread age; partial results aren't cached.
 - [ ] Opt-in `npm run smoke` hitting each adapter once for real (API shape drift is the most
       likely breakage).
-- [ ] Search on busy subreddits: retry once with a narrower window when the archive times out.
+- [x] Search on busy subreddits: scan the plain listing and match locally when keyword search is refused.
+- [x] Search results newest first; stale comment counts hidden.
+- [x] One network blip no longer marks a source down for 10 minutes.
 
 **Optional — flagship direction, not scheduled**
 - [ ] `ask "<question>"`: an LLM picks subreddits → search → read the top threads → complaints

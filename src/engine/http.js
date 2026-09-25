@@ -12,7 +12,8 @@ const errorText = body => {
     return '';
   }
 };
-const RETRIES = 3;
+// One retry: PullPush's 429 is an hourly quota, so waiting 5+10+20 s just delayed the failure.
+const RETRIES = 1;
 const TIMEOUT_MS = 20_000;       // interactive use: fail over to the next source instead of hanging
 const DOWN_FOR_MS = 10 * 60_000; // an outage rarely clears in seconds; don't make every call wait on it
 
@@ -41,6 +42,8 @@ export function createHttp({ fetch = globalThis.fetch, userAgent = 'tarantula', 
         });
         text = await res.text();
       } catch (e) {
+        // A connection error can be our own network blipping; only a repeat (or a timeout) is the host.
+        if (attempt < RETRIES && e.name !== 'TimeoutError') { await wait(1000); continue; }
         throw down(e.message);
       }
       if (res.status === 429 && attempt < RETRIES) { await wait(5000 * 2 ** attempt); continue; }

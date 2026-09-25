@@ -81,7 +81,7 @@ Claude gets two tools:
 | Tool | Give it | Get back |
 |---|---|---|
 | `read_reddit_thread` | a thread link, comment link, share link or post id | the post and its comments |
-| `search_reddit` | a subreddit and some keywords | the most-discussed matching posts, with links |
+| `search_reddit` | a subreddit and some keywords | the newest matching posts, with links |
 
 Keep the `@latest`, or `npx` keeps using whichever version it cached first. `claude mcp list`
 should show `tarantula … ✔ Connected`. Any other MCP client can run the same command over stdio.
@@ -133,7 +133,8 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **These are archived copies.** Scores are usually stale, threads from the last few hours may be
   missing, and a copy can include text its author later deleted on Reddit.
-- **Search needs a subreddit, and busy ones can time out.** Retry, or narrow it with `--days`.
+- **Search needs a subreddit.** When the archive's keyword search is busy, tarantula scans the
+  subreddit's recent posts instead (last 30 days, up to 2,000 posts) and says how far back it got.
 - **It's early.** Version 0.x, so details may still change.
 
 ## Credits

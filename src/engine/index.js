@@ -108,8 +108,32 @@ export function limitThread(result, max) {
   return { ...result, comments, completeness: { ...result.completeness, shown, truncated: shown < result.completeness.shown } };
 }
 
-// Posts in one subreddit matching `query`, most-discussed first among the 100 newest matches.
-// Archive search needs a subreddit, so it's required here too.
+export const SCAN_DAYS = 30, SCAN_PAGES = 20;
+
+// Keyword search on the archive is rationed; its plain listing isn't. So: page through the
+// subreddit newest-first and keep posts whose title+body contain every query word.
+// ponytail: substring match ("job" also hits "jobs"); no stemming or ranking, add if matches get noisy
+async function scan(adapter, { sub, q, after, limit }, get, now) {
+  const words = q.toLowerCase().split(/\s+/);
+  const since = after ?? now() - SCAN_DAYS * 86_400;
+  const seen = new Set(), rows = [];
+  let before, backTo = since;
+  for (let page = 0; page < SCAN_PAGES && rows.length < limit; page++) {
+    const batch = await adapter.list({ subreddit: sub, after: since, before }, get);
+    for (const r of batch) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      if (words.every(w => `${r.title ?? ''} ${r.selftext ?? ''}`.toLowerCase().includes(w))) rows.push(r);
+    }
+    if (batch.length < 100) { backTo = since; break; }  // reached the start of the window
+    backTo = batch.at(-1).created_utc;
+    before = backTo + 1; // 1 s overlap so same-second posts aren't skipped; `seen` drops repeats
+  }
+  return { rows, method: 'scan', scanned: seen.size, back_to: backTo };
+}
+
+// Posts in one subreddit matching `query`, newest first. Archive keyword search first (covers all
+// time, often refused in ~0.5 s), else a scan of recent posts. A subreddit is required.
 export async function searchPosts({ subreddit, query, days, limit = 25 }, { http, adapters = ADAPTERS, now = nowS }) {
   const sub = String(subreddit ?? '').trim().replace(/^\/?r\//i, '');
   const q = String(query ?? '').trim();
@@ -117,14 +141,17 @@ export async function searchPosts({ subreddit, query, days, limit = 25 }, { http
   if (!q) throw new UserError('search needs a query');
 
   const after = days ? now() - days * 86_400 : undefined;
-  // An empty page might be the archive, not the subreddit: try the next source before believing it.
-  const { adapter, result } = await firstHealthy(adapters.filter(a => a.search),
-    a => a.search({ subreddit: sub, query: q, after }, via(http, a)), r => r.length > 0).catch(e => {
-    if (e instanceof SourceDown && !days) e.message += ' Busy subreddits often time out on archive search: try again, or narrow it with days (e.g. 365).';
-    throw e;
-  });
-  const results = result.map(toItem)
-    .sort((a, b) => (b.comment_count ?? 0) - (a.comment_count ?? 0))
-    .slice(0, limit);
-  return { schema: 1, subreddit: sub, query: q, results, provenance: { source: adapter.name, fetched_at: now() } };
+  const attempt = a => a.search({ subreddit: sub, query: q, after }, via(http, a))
+    .then(rows => ({ rows, method: 'search' }))
+    .catch(e => {
+      if (!(e instanceof SourceDown) || !a.list) throw e;
+      return scan(a, { sub, q, after, limit }, via(http, a), now);
+    });
+  // An empty search page might be the archive, not the subreddit: try the next source first.
+  // A scan that read posts and matched none is a real "no matches".
+  const { adapter, result } = await firstHealthy(adapters.filter(a => a.search), attempt,
+    r => r.rows.length > 0 || r.scanned > 0);
+  const results = result.rows.map(toItem).sort((a, b) => b.created_at - a.created_at).slice(0, limit);
+  const { rows, ...how } = result;
+  return { schema: 1, subreddit: sub, query: q, results, provenance: { source: adapter.name, fetched_at: now(), ...how } };
 }

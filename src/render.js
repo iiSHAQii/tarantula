@@ -32,10 +32,13 @@ export function renderThread({ thread: t, comments, provenance: p, completeness:
 }
 
 export function renderSearch({ subreddit, query, results, provenance: p }) {
-  const out = [`# r/${subreddit}: "${query}"`, `${results.length} posts via ${p.source}, most-discussed first`, ''];
-  if (!results.length) out.push('No matches. Archive search can miss very active subreddits; try other words or another subreddit.');
+  const out = [`# r/${subreddit}: "${query}"`, `${results.length} posts via ${p.source}, newest first`];
+  if (p.method === 'scan') out.push(`Matched every word in the ${p.scanned} newest posts, back to ${when(p.back_to)} (archive keyword search was unavailable).`);
+  // Archives record comment counts minutes after posting, so they read ~0: showing them misleads.
+  out.push('Comment counts are not shown (archives capture them too early); open a thread to see its comments.', '');
+  if (!results.length) out.push('No matches. Try fewer or other words, or another subreddit.');
   for (const r of results) {
-    out.push(`- **${r.title}** · ${r.comment_count ?? '?'} comments · ${when(r.created_at)} · u/${r.author}${flag(r)}`, `  ${r.url}`);
+    out.push(`- **${r.title}** · ${when(r.created_at)} · u/${r.author}${flag(r)}`, `  ${r.url}`);
     const snippet = r.text.replace(/\s+/g, ' ').trim();
     if (snippet) out.push(`  > ${snippet.length > 200 ? snippet.slice(0, 200) + '…' : snippet}`);
   }

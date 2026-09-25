@@ -26,11 +26,18 @@ export default {
     return { post, comments: rows, collapsed: stats.collapsed };
   },
 
-  // `query` matches title and body. Arctic Shift's docs: needs a subreddit, not supported on very
-  // active subreddits (those answer with an error, which the chain treats as down -> PullPush).
+  // `query` matches title and body. Rationed: most calls get 422 "Timeout. Maybe slow down a bit"
+  // within 0.5 s, even on small subreddits; the engine then scans `list` instead.
   async search({ subreddit, query, after }, get) {
     const url = `${API}/posts/search?subreddit=${subreddit}&query=${encodeURIComponent(query)}&limit=100&sort=desc`
       + (after ? `&after=${after}` : '');
+    return (await get(url)).data ?? [];
+  },
+
+  // Plain newest-first listing, no keywords: not rationed like `query` search (stress test 2026-09-24).
+  async list({ subreddit, after, before }, get) {
+    const url = `${API}/posts/search?subreddit=${subreddit}&limit=100&sort=desc`
+      + (after ? `&after=${after}` : '') + (before ? `&before=${before}` : '');
     return (await get(url)).data ?? [];
   },
 

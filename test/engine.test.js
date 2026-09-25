@@ -62,6 +62,8 @@ test('http: 5xx, block pages and network errors mean "source down"; 429 backs of
   await assert.rejects(http(async () => { throw new Error('ENOTFOUND'); })('https://a.test/x'), SourceDown);
   const seq = [reply(429, ''), reply(200, '{"data":[1]}')];
   assert.deepEqual(await http(() => seq.shift()())('https://a.test/x'), { data: [1] });
+  const blip = [async () => { throw new Error('fetch failed'); }, reply(200, '{"data":[2]}')];
+  assert.deepEqual(await http(() => blip.shift()())('https://c.test/x'), { data: [2] }); // one network blip isn't "down"
 
   let calls = 0;
   const flaky = http(async () => { calls++; return { status: 503, text: async () => '' }; });
@@ -142,16 +144,36 @@ test('NotFound only when every source answered; any source down means SourceDown
   await assert.rejects(run([down]), SourceDown);
 });
 
-test('search needs a subreddit and a query, skips an empty source, returns the most-discussed first', async () => {
-  const p = (id, n) => ({ ...post, id, num_comments: n });
+test('search needs a subreddit and a query, skips an empty source, returns the newest first', async () => {
+  const p = (id, t) => ({ ...post, id, created_utc: t });
   const empty = { name: 'empty', minIntervalMs: 0, search: async () => [] };
-  const full = { name: 'full', minIntervalMs: 0, search: async () => [p('a1', 2), p('a2', 9), p('a3', 5)] };
+  const full = { name: 'full', minIntervalMs: 0, search: async () => [p('a1', 100), p('a2', 300), p('a3', 200)] };
   const found = await searchPosts({ subreddit: 'r/testsub', query: ' packaging ', limit: 2 }, { http: fakeHttp, adapters: [empty, full] });
   assert.equal(found.provenance.source, 'full');
   assert.equal(found.subreddit, 'testsub');
   assert.deepEqual(found.results.map(i => i.id), ['t3_a2', 't3_a3']);
   await assert.rejects(searchPosts({ subreddit: 'not a sub!', query: 'x' }, { http: fakeHttp, adapters: [full] }), UserError);
   await assert.rejects(searchPosts({ subreddit: 'testsub', query: '  ' }, { http: fakeHttp, adapters: [full] }), UserError);
+});
+
+test('search: a refused keyword search falls back to scanning the listing and matching every word locally', async () => {
+  const now = () => 1_000_000;
+  const row = (i, title) => ({ ...post, id: `s${i}`, title, selftext: '', created_utc: now() - i * 60 });
+  // two pages: 100 posts, then 3; matches sit on both pages
+  const all = [...Array(103)].map((_, i) => row(i, i % 50 === 7 ? 'Packaging COSTS rising' : i === 9 ? 'packaging only' : 'other'));
+  const pages = [];
+  const rationed = {
+    name: 'rationed', minIntervalMs: 0,
+    search: async () => { throw new SourceDown('x.test: HTTP 422: Timeout. Maybe slow down a bit'); },
+    list: async ({ before }) => { pages.push(before); return all.filter(r => !before || r.created_utc < before).slice(0, 100); },
+  };
+  const r = await searchPosts({ subreddit: 'testsub', query: 'packaging costs' }, { http: fakeHttp, adapters: [rationed], now });
+  assert.deepEqual(r.results.map(i => i.id), ['t3_s7', 't3_s57']);
+  assert.equal(pages.length, 2);
+  assert.equal(pages[1], all[99].created_utc + 1);
+  assert.deepEqual([r.provenance.method, r.provenance.scanned], ['scan', 103]);
+  const none = await searchPosts({ subreddit: 'testsub', query: 'zebra' }, { http: fakeHttp, adapters: [rationed], now });
+  assert.equal(none.results.length, 0); // scanned and found nothing = a real "no matches", not an error
 });
 
 test('MCP wrapper: Reddit text cannot close or re-open the untrusted block', () => {
