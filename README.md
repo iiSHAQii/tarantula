@@ -29,16 +29,16 @@ From a home connection, September 2026:
 $ curl https://www.reddit.com/r/<sub>/comments/<id>.json
 403 Forbidden
 
-$ curl -A "<a real browser's user agent>" https://www.reddit.com/r/<sub>/comments/<id>.json
+$ curl -A "<browser's user agent>" https://www.reddit.com/...
 403 Forbidden
 
-$ curl -A "<a real browser's user agent>" https://old.reddit.com/r/<sub>/comments/<id>
+$ curl -A "<a real browser's user agent>" https://old.reddit.com/...
 302 → /login/?reason=lor2
 
-# a fresh headless Chromium (Playwright) opening the thread
+# Headless Chromium (Playwright) opening the thread
 "You've been blocked by network security."
 
-$ curl https://r.jina.ai/https://www.reddit.com/r/<sub>/comments/<id>
+$ curl https://r.jina.ai/https://www.reddit.com/...
 200, but the body is the same block page
 ```
 
@@ -51,16 +51,18 @@ It tries [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift) first an
 [PullPush](https://pullpush.io). You get the thread back as clean markdown or JSON, in your
 terminal, or as two tools Claude can call on its own.
 
-<p align="center"><sub><b>~650 lines</b> · <b>0 dependencies</b> · <b>2 sources</b> · <b>2 MCP tools</b> · <b>10 tests</b></sub></p>
+<p align="center"><sub><b>~700 lines</b> · <b>0 dependencies</b> · <b>2 sources</b> · <b>2 MCP tools</b> · <b>11 tests</b></sub></p>
 
 ## Try it
 
 ```sh
 npx tarantula-cli read https://www.reddit.com/r/<sub>/comments/<id>/...
 npx tarantula-cli read https://redd.it/<id> --max 50          # first 50 comments
-npx tarantula-cli search smallbusiness packaging --days 365    # posts in one subreddit
+npx tarantula-cli search smallbusiness packaging --days 365    # newest matching posts
 npx tarantula-cli read <link> --json                           # JSON instead of markdown
 ```
+
+<p align="center"><img src="assets/demo-cli.gif" width="860" alt="Terminal: tarantula searches r/tarantulas for 'beginner', then reads a thread about picking a first tarantula"></p>
 
 Needs Node 20 or newer. `npm i -g tarantula-cli` gives you a `tarantula` command that starts
 faster than `npx`.
@@ -93,20 +95,14 @@ should show `tarantula … ✔ Connected`. Any other MCP client can run the same
 flowchart TD
     ask(["you or Claude: read · search"]) --> cache{"thread in the cache<br/>and still fresh?"}
     cache -- yes --> out(["markdown · JSON · MCP result"])
-    cache -- no --> as["Arctic Shift"]
+    cache -- "no, or it's a search" --> as["Arctic Shift"]
     as -- found it --> out
-    as -- "down, blocked or missing it" --> pp["PullPush"]
+    as -- "keyword search refused" --> scan["read newest posts<br/>and match the words here"]
+    scan --> out
+    as -- "down | blocked | missing" --> pp["PullPush"]
     pp -- found it --> out
-    pp -- down --> err(["a clear error, never a fake 'no results'"])
+    pp -- down --> err(["Error 404 | 429"])
 ```
-
-Searches skip the cache and always ask the archives.
-
-## What it promises
-
-- **A down archive is reported as down.** It never turns an outage into "no results".
-- **Reddit text is marked as untrusted.** Claude treats it as something to read, not instructions to follow.
-- **It's polite to the archives.** Requests are paced per archive and it backs off when asked to.
 
 <details>
 <summary><b>The JSON format</b></summary>
@@ -133,16 +129,14 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **These are archived copies.** Scores are usually stale, threads from the last few hours may be
   missing, and a copy can include text its author later deleted on Reddit.
-- **Search needs a subreddit.** When the archive's keyword search is busy, tarantula scans the
-  subreddit's recent posts instead (last 30 days, up to 2,000 posts) and says how far back it got.
-- **It's early.** Version 0.x, so details may still change.
+- **Search needs a subreddit, and results are newest first.** When the archive's keyword search is
+  busy, tarantula reads the subreddit's newest posts itself (last 30 days, up to 2,000 posts) and
+  tells you how far back it got.
 
 ## Credits
 
 Tarantula only works because [Arctic Shift](https://github.com/ArthurHeitmann/arctic_shift) and
-[PullPush](https://pullpush.io) keep public copies of Reddit, run by volunteers. Please go easy on
+[PullPush](https://pullpush.io) keep public copies of Reddit, run by volunteers. Please support
 them. Not affiliated with Reddit.
 
-MIT © S.M. Ishaq
-
-<p align="center"><img src="assets/tarantula-footer.svg" width="72" alt=""></p>
+<p align="center"><img src="assets/tarantula-footer.svg" width="64" align="middle" alt="">&nbsp;&nbsp;MIT © S.M. Ishaq</p>
